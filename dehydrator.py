@@ -241,8 +241,8 @@ class Dehydrator:
     # API only (no local fallback)
     # 仅通过 API 脱水（无本地回退）
     # ---------------------------------------------------------
-  async def _create_with_retry(self, **kwargs):
-        """带重试的API调用，处理503临时错误"""
+    async def _create_with_retry(self, **kwargs):
+        """API call with retry for 503 errors"""
         import asyncio
         max_retries = 3
         for attempt in range(max_retries):
