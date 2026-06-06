@@ -1,3 +1,4 @@
+transport: streamable-http
 # ============================================================
 # Ombre Brain Configuration / 配置文件
 # Copy this file to config.yaml and modify as needed
