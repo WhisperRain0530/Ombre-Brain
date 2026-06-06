@@ -241,6 +241,20 @@ class Dehydrator:
     # API only (no local fallback)
     # 仅通过 API 脱水（无本地回退）
     # ---------------------------------------------------------
+  async def _create_with_retry(self, **kwargs):
+        """带重试的API调用，处理503临时错误"""
+        import asyncio
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                return await self.client.chat.completions.create(**kwargs)
+            except Exception as e:
+                if attempt < max_retries - 1 and any(
+                    x in str(e) for x in ["503", "UNAVAILABLE", "overloaded"]
+                ):
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                raise
     async def dehydrate(self, content: str, metadata: dict = None) -> str:
         """
         Dehydrate/compress memory content.
@@ -312,7 +326,7 @@ class Dehydrator:
         Call LLM API for intelligent dehydration (via OpenAI-compatible client).
         调用 LLM API 执行智能脱水。
         """
-        response = await self.client.chat.completions.create(
+        response = await self._create_with_retry(
             model=self.model,
             messages=[
                 {"role": "system", "content": DEHYDRATE_PROMPT},
@@ -335,7 +349,7 @@ class Dehydrator:
         调用 LLM API 执行智能合并。
         """
         user_msg = f"旧记忆：\n{old_content[:2000]}\n\n新内容：\n{new_content[:2000]}"
-        response = await self.client.chat.completions.create(
+        response = await self._create_with_retry(
             model=self.model,
             messages=[
                 {"role": "system", "content": MERGE_PROMPT},
@@ -426,7 +440,7 @@ class Dehydrator:
         Call LLM API for content analysis / tagging.
         调用 LLM API 执行内容分析打标。
         """
-        response = await self.client.chat.completions.create(
+        response = await self._create_with_retry(
             model=self.model,
             messages=[
                 {"role": "system", "content": ANALYZE_PROMPT},
@@ -536,7 +550,7 @@ class Dehydrator:
         Call LLM API for diary organization.
         调用 LLM API 执行日记整理。
         """
-        response = await self.client.chat.completions.create(
+        response = await self._create_with_retry(
             model=self.model,
             messages=[
                 {"role": "system", "content": DIGEST_PROMPT},
