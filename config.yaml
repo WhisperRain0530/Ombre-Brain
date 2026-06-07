@@ -58,7 +58,7 @@ decay:
   threshold: 0.25                 # Archive threshold / 归档阈值
   check_interval_hours: 24        # Check interval (hours) / 衰减检查间隔（小时）
   emotion_weights:
-  valence_boost: 0.6
+    valence_boost: 0.6
     base: 1.0                     # Base weight / 基础权重
     arousal_boost: 1.2            # Arousal boost coefficient / 唤醒度加成系数
 
