@@ -244,6 +244,14 @@ class Dehydrator:
     async def _create_with_retry(self, **kwargs):
         """API call with retry for 503 errors"""
         import asyncio
+        # Gemini 2.5 默认开启 thinking，且思考 token 计入 max_tokens。
+        # 脱水/打标/日记整理这类工具调用不需要思维链，关掉它，
+        # 否则思考会吃光 max_tokens 配额，导致正文为空或 JSON 被截断（grow 报"返回空结果"）。
+        if "generativelanguage.googleapis.com" in self.base_url:
+            extra = kwargs.setdefault("extra_body", {})
+            extra.setdefault("extra_body", {})["google"] = {
+                "thinking_config": {"thinking_budget": 0}
+            }
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -556,7 +564,7 @@ class Dehydrator:
                 {"role": "system", "content": DIGEST_PROMPT},
                 {"role": "user", "content": content[:5000]},
             ],
-            max_tokens=2048,
+            max_tokens=8192,
             temperature=0.0,
         )
         if not response.choices:
