@@ -462,15 +462,27 @@ class Dehydrator:
         # openai_compat (default)
         if self.client is None:
             return ""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
+        kwargs: dict = {
+            "model": self.model,
+            "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            max_tokens=max_tokens if max_tokens is not None else self.max_tokens,
-            temperature=temperature if temperature is not None else self.temperature,
-        )
+            "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
+            "temperature": temperature if temperature is not None else self.temperature,
+        }
+        # Gemini 经 OpenAI 兼容端点调用时同样需要限制思考预算（工单 §1.4）：
+        # gemini-2.5+ 默认思考，思考 token 计入 max_tokens，会吃光预算导致
+        # 正文为空 / JSON 截断（grow 报"返回空结果"）。原生路径已在
+        # _chat_gemini 处理；这里覆盖 openai_compat 路径。thinking_budget=None
+        # 时不发送该字段（兼容不支持 thinkingConfig 的老模型 / 第三方代理）。
+        if self.thinking_budget is not None and is_gemini_native_host(self.base_url):
+            kwargs["extra_body"] = {
+                "extra_body": {
+                    "google": {"thinking_config": {"thinking_budget": self.thinking_budget}}
+                }
+            }
+        response = await self.client.chat.completions.create(**kwargs)
         if not response.choices:
             return ""
         return response.choices[0].message.content or ""
