@@ -1,0 +1,107 @@
+# ============================================================
+# Ombre Brain Configuration / 配置文件（v2-port 成品）
+# 由旧 fork 配置按移植工单 §1.3 映射到新版键结构。
+# API 密钥一律走环境变量，勿写入本文件：
+#   OMBRE_COMPRESS_API_KEY —— 脱水/打标/合并/拆分 LLM
+#   OMBRE_EMBED_API_KEY    —— 向量化（可与上面同一个 Gemini key）
+# ============================================================
+
+# --- Transport / 传输方式 ---
+# 工单 §1.3：云端部署用 streamable-http（Claude.ai 远程 MCP 需要）。
+# 也可用环境变量 OMBRE_TRANSPORT 覆盖。
+transport: "streamable-http"
+
+# --- Log level / 日志级别 ---
+log_level: "INFO"
+
+# --- Human display name / 人类一方的称呼 ---
+# 注入脱水/合并提示词的「视角铁律」：记忆原文里的"你/她/他"统一还原为
+# 这个名字，避免被压成"用户/对方/双方"。Dashboard 设置页可改。
+human: "UU"
+
+# --- MCP remote auth / MCP 远程鉴权开关 ---
+# true (默认): HTTPS 连接 /mcp 强制 OAuth 2.1 + PKCE（Claude.ai 网页版需要）。
+mcp_require_auth: true
+
+# --- HTTP hooks auth / HTTP 钩子鉴权 ---
+# /breath-hook 和 /dream-hook 默认不公开；可用 Dashboard 登录态或 token 调用。
+hooks:
+  token: ""
+  allow_public: false
+
+# --- Bucket storage path / 记忆桶存储路径 ---
+# 留空默认 ./buckets/；部署时用 OMBRE_VAULT_DIR（或旧名 OMBRE_BUCKETS_DIR）覆盖。
+# buckets_dir: "/path/to/your/Obsidian Vault/Ombre Brain"
+
+# --- Merge threshold / 桶合并阈值 ---
+merge_threshold: 75
+
+# --- Dehydration API / 脱水压缩 API 配置 ---
+# API 为必需；key/endpoint 不可用时 hold/grow 直接报错，不静默降级（工单 §1.5）。
+dehydration:
+  model: "gemini-2.5-flash"                                          # 工单 §1.3
+  base_url: "https://generativelanguage.googleapis.com/v1beta/openai" # 工单 §1.3
+  # api_key: ""    # ⚠️ 用环境变量 OMBRE_COMPRESS_API_KEY，勿写这里
+  max_tokens: 1024
+  temperature: 0.1
+  timeout_seconds: 120
+  # Gemini 2.5+ 思考预算：0 = 关闭思考（工单 §1.4，防思考 token 吃光
+  # max_tokens 导致 grow 返回空/JSON 截断）。老模型不识别时设 null 不发送。
+  thinking_budget: 0
+
+# --- Decay parameters / 记忆衰减参数 ---
+decay:
+  lambda: 0.03                    # 工单 §1.3（上游默认 0.05）
+  threshold: 0.25                 # 工单 §1.3（上游默认 0.3）
+  check_interval_hours: 24
+  emotion_weights:
+    base: 1.0
+    arousal_boost: 1.2            # 工单 §1.3（上游默认 0.8）
+    valence_boost: 0.6            # 工单 §1.2 新增键：正效价记忆衰减更慢
+
+# --- Embedding / 向量化配置 ---
+embedding:
+  enabled: true
+  backend: "api"
+  model: "gemini-embedding-001"
+  base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+  timeout_seconds: 120
+  # api_key: ""   # ⚠️ 用环境变量 OMBRE_EMBED_API_KEY（新版不再复用脱水 key）
+
+# --- Scoring weights / 检索权重参数 ---
+# total = topic(×4) + emotion(×2) + time(×1.5) + importance(×1)
+scoring_weights:
+  topic_relevance: 4.0
+  emotion_resonance: 2.0
+  time_proximity: 1.5             # 工单 §1.3（新版默认已同值，显式写死防漂移）
+  importance: 1.0
+  content_weight: 1.0             # 工单 §1.3（正文×1；新版默认已同值，显式写死防漂移）
+
+# --- Fuzzy matching / 模糊匹配参数 ---
+matching:
+  fuzzy_threshold: 50
+  max_results: 5
+
+# --- Surfacing defaults / 浮现默认参数（新版原生，保持上游默认）---
+surfacing:
+  breath_max_results: 20
+  breath_max_tokens: 10000
+  feel_max_tokens: 6000
+  sampling:
+    enabled: false                # false = top1+shuffle，与旧版行为一致
+    top_k: 5
+    sample_k: 2
+    temperature: 0.7
+
+# --- Limits / 边界限制（新版原生，保持上游默认）---
+limits:
+  max_bucket_bytes: 51200
+  max_pinned: 20
+
+# --- 桶类型默认值（新版原生，保持上游默认）---
+bucket_type_defaults:
+  letter:
+    weight: 1.0
+    dont_surface: false
+  plan:
+    weight: 0.5
