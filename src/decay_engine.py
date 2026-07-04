@@ -9,7 +9,8 @@ decay_engine.py — 记忆衰减引擎，模拟人类遗忘曲线
 关键行为：
 - 打分公式（改进版艾宾浩斯 + 情感坐标）：
     Score = Importance × (activation_count^0.3) × e^(-λ×days) × emotion_weight
-- 情感权重 = base + arousal × arousal_boost；唤醒度高的记忆衰减得慢
+- 情感权重 = base + arousal × arousal_boost + max(0, valence−0.5) × valence_boost；
+  唤醒度高、效价偏正的记忆衰减得慢
 - pinned / protected 桶不参与衰减、不被归档
 - ensure_started() 幂等启动后台循环；可被测试 monkeypatch 成 noop
 
@@ -47,6 +48,7 @@ _DEFAULT_THRESHOLD = 0.3          # 低于此分数 → 归档
 _DEFAULT_CHECK_INTERVAL_HRS = 24  # 后台循环间隔（小时）
 _DEFAULT_EMOTION_BASE = 1.0       # 情感权重基准
 _DEFAULT_AROUSAL_BOOST = 0.8      # arousal 每 +1 → 情感权重 +0.8
+_DEFAULT_VALENCE_BOOST = 0.6      # valence 超出中性(0.5)的部分 → 情感权重加成（工单 §1.2）
 
 # --- 锁分：某些桶不参与衰减 ---
 _SCORE_PINNED = 999.0    # pinned / protected / permanent 桶恒高分（永不归档）
@@ -84,8 +86,9 @@ _AUTO_RESOLVE_IMPORTANCE_MAX = 4   # 重要度 ≤ 4 才允许自动结案
 _AUTO_RESOLVE_DAYS_MIN = 30        # 且 30 天未被激活
 _AUTO_RESOLVE_FALLBACK_DAYS = 999  # 时间字段坏掉时，按"很久以前"对待，触发自动结案
 
-# --- Arousal/importance 兜底 ---
+# --- Arousal/valence/importance 兜底 ---
 _DEFAULT_AROUSAL = 0.3
+_DEFAULT_VALENCE = 0.5   # 中性效价；valence 加成以此为零点
 _DEFAULT_IMPORTANCE = 5
 _DEFAULT_DAYS_FALLBACK = 30  # calculate_score 时间字段坏 → 按 30 天处理（保守）
 
@@ -139,6 +142,7 @@ class DecayEngine:
         emotion_cfg = decay_cfg.get("emotion_weights", {})
         self.emotion_base = emotion_cfg.get("base", _DEFAULT_EMOTION_BASE)
         self.arousal_boost = emotion_cfg.get("arousal_boost", _DEFAULT_AROUSAL_BOOST)
+        self.valence_boost = emotion_cfg.get("valence_boost", _DEFAULT_VALENCE_BOOST)
 
         self.bucket_mgr = bucket_mgr
 
@@ -221,7 +225,16 @@ class DecayEngine:
             arousal = max(0.0, min(1.0, float(metadata.get("arousal", _DEFAULT_AROUSAL))))
         except (ValueError, TypeError):
             arousal = _DEFAULT_AROUSAL
-        emotion_weight = self.emotion_base + arousal * self.arousal_boost
+        try:
+            valence = max(0.0, min(1.0, float(metadata.get("valence", _DEFAULT_VALENCE))))
+        except (ValueError, TypeError):
+            valence = _DEFAULT_VALENCE
+        # 工单 §1.2：正效价记忆衰减更慢；仅高于中性(0.5)的部分参与加成，负效价不惩罚
+        emotion_weight = (
+            self.emotion_base
+            + arousal * self.arousal_boost
+            + max(0.0, valence - _DEFAULT_VALENCE) * self.valence_boost
+        )
 
         # --- Time weight ---
         time_weight = self._calc_time_weight(days_since)

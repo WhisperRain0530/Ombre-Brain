@@ -87,6 +87,8 @@ decay:
   emotion_weights:
     base: 1.0                     # Base weight / 基础权重
     arousal_boost: 0.8            # Arousal boost coefficient / 唤醒度加成系数
+    valence_boost: 0.6            # Valence boost coefficient (only the part above neutral 0.5 counts)
+                                  # 效价加成系数（仅高于中性 0.5 的部分参与加成，负效价不惩罚）
 
 # --- Embedding / 向量化配置 ---
 # 使用 OpenAI 兼容的云端 API（如 Gemini）进行向量化。
